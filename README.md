@@ -265,6 +265,13 @@ surf.DefaultSendReferer = false
 surf.DefaultMetaRefreshHandling = false
 surf.DefaultFollowRedirects = false
 
+// Setting a logger allows messages to be logged to the io.Writer of your
+// choice. There are three logging levels: LogLevelDebug, LogLevelInfo, and
+// LogLevelError. LogLevelDebug is the most verbose, while LogLevelInfo only
+// logs requests, responses, and form submissions.
+logger := log.New(os.Stdout, "", log.Lshortfile)
+bow.SetLogger(logger, browser.LogLevelDebug)
+
 // Override the build in cookie jar.
 // Surf uses cookiejar.Jar by default.
 bow.SetCookieJar(jar.NewMemoryCookies())
