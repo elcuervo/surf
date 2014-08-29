@@ -10,17 +10,33 @@ import (
 
 // Submittable represents an element that may be submitted, such as a form.
 type Submittable interface {
+	event.Eventable
+
+	// Method returns the form method, eg "GET" or "POST".
 	Method() string
+
+	// Action returns the form action URL.
 	Action() *url.URL
+
+	// Input sets the value of a form field.
 	Input(name, value string) error
+
+	// Click submits the form by clicking the button with the given name.
 	Click(button string) error
+
+	// Submit submits the form.
+	// Clicks the first button in the form, or submits the form without using
+	// any button when the form does not contain any buttons.
 	Submit() error
-	Dom() *goquery.Selection
+
+	// Find returns the form elements matching the expression.
+	Find(expr string) *goquery.Selection
 }
 
 // Form is the default form element.
 type Form struct {
-	bow       Browsable
+	*event.Dispatcher
+
 	selection *goquery.Selection
 	method    string
 	action    *url.URL
@@ -29,17 +45,17 @@ type Form struct {
 }
 
 // NewForm creates and returns a *Form type.
-func NewForm(bow Browsable, s *goquery.Selection) *Form {
-	fields, buttons := serializeForm(s)
-	method, action := formAttributes(bow, s)
+func NewForm(sel *goquery.Selection) *Form {
+	fields, buttons := serializeForm(sel)
+	method, action := formAttributes(sel)
 
 	return &Form{
-		bow:       bow,
-		selection: s,
-		method:    method,
-		action:    action,
-		fields:    fields,
-		buttons:   buttons,
+		Dispatcher: event.NewDispatcher(),
+		selection:  sel,
+		method:     method,
+		action:     action,
+		fields:     fields,
+		buttons:    buttons,
 	}
 }
 
@@ -49,7 +65,6 @@ func (f *Form) Method() string {
 }
 
 // Action returns the form action URL.
-// The URL will always be absolute.
 func (f *Form) Action() *url.URL {
 	return f.action
 }
@@ -85,9 +100,9 @@ func (f *Form) Click(button string) error {
 	return f.send(button, f.buttons[button][0])
 }
 
-// Dom returns the inner *goquery.Selection.
-func (f *Form) Dom() *goquery.Selection {
-	return f.selection
+// Find returns the form elements matching the expression.
+func (f *Form) Find(expr string) *goquery.Selection {
+	return f.selection.Find(expr)
 }
 
 // send submits the form.
@@ -99,19 +114,8 @@ func (f *Form) send(buttonName, buttonValue string) error {
 	if buttonName != "" {
 		values.Set(buttonName, buttonValue)
 	}
-	f.bow.Do(event.Submit, f, &event.SubmitArgs{
-		Values: values,
-		Method: f.method,
-		Action: f.action,
-	})
 
-	if f.method == "GET" {
-		return f.bow.OpenForm(f.action.String(), values)
-	} else {
-		return f.bow.PostForm(f.action.String(), values)
-	}
-
-	return nil
+	return f.Do(event.Submit, f, values)
 }
 
 // Serialize converts the form fields into a url.Values type.
@@ -151,17 +155,8 @@ func serializeForm(sel *goquery.Selection) (url.Values, url.Values) {
 }
 
 // formAttributes returns the method and action on the form.
-func formAttributes(bow Browsable, s *goquery.Selection) (string, *url.URL) {
+func formAttributes(s *goquery.Selection) (string, *url.URL) {
 	method := strings.ToUpper(attrOrDefault("method", "GET", s))
-	action := attrOrDefault("action", bow.Url().String(), s)
-	action, err := bow.ResolveStringUrl(action)
-	if err != nil {
-		action = bow.Url().String()
-	}
-	au, err := url.Parse(action)
-	if err != nil {
-		au = bow.Url()
-	}
-
-	return method, au
+	action, _ := url.Parse(attrOrDefault("action", "", s))
+	return method, action
 }

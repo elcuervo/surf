@@ -312,7 +312,7 @@ func (bow *Browser) Form(expr string) (Submittable, error) {
 			"Expr '%s' does not match a form tag.", expr)
 	}
 
-	return NewForm(bow, sel), nil
+	return bow.newForm(sel), nil
 }
 
 // Forms returns an array of every form in the page.
@@ -325,7 +325,7 @@ func (bow *Browser) Forms() []Submittable {
 
 	forms := make([]Submittable, len)
 	sel.Each(func(_ int, s *goquery.Selection) {
-		forms = append(forms, NewForm(bow, s))
+		forms = append(forms, bow.newForm(s))
 	})
 	return forms
 }
@@ -669,6 +669,24 @@ func (bow *Browser) doPostRequest(resp *http.Response) error {
 // doClick triggers the ClickEvent event.
 func (bow *Browser) doClick(u *url.URL) error {
 	return bow.Do(event.Click, bow, u)
+}
+
+// newForm creates and returns a new *Form instance with the event.Submit event
+// bound to the browser.
+func (bow *Browser) newForm(s *goquery.Selection) *Form {
+	form := NewForm(s)
+	form.OnFunc(event.Submit, (event.HandlerFunc)(func(_ event.Event, sender, args interface{}) error {
+		fm := sender.(*Form)
+		action := bow.ResolveUrl(fm.Action())
+		values := args.(url.Values)
+		if fm.Method() == "GET" {
+			return bow.OpenForm(action.String(), values)
+		} else {
+			return bow.PostForm(action.String(), values)
+		}
+	}))
+
+	return form
 }
 
 // shouldRedirect is used as the value to http.Client.CheckRedirect.

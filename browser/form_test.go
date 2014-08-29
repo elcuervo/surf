@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-func TestBrowserForm(t *testing.T) {
+func TestSubmit(t *testing.T) {
 	ut.Run(t)
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" {

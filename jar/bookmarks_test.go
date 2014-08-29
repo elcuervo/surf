@@ -25,7 +25,7 @@ func TestFileBookmarks(t *testing.T) {
 }
 
 // assertBookmarks tests the given bookmark jar.
-func assertBookmarks(b BookmarksJar) {
+func assertBookmarks(b Bookmarks) {
 	err := b.Save("test1", "http://localhost")
 	ut.AssertNil(err)
 	err = b.Save("test2", "http://127.0.0.1")
