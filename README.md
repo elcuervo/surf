@@ -10,6 +10,7 @@ _This project is very young, and the API is bound to change often. Use at your o
 * [General Usage](#general-usage)
 * [Downloading](#downloading)
 * [User Agents](#user-agents)
+* [Recording and Playback](#recording-and-playback)
 * [Settings](#settings)
 * [Credits](#credits)
 * [Use Cases](#use-cases)
@@ -27,7 +28,7 @@ Import the library into your project.
 `import "github.com/headzoo/surf"`
 
 
-### Usage
+### General Usage
 ```go
 // Start by creating a new bow.
 bow := surf.NewBrowser()
@@ -98,87 +99,6 @@ if err != nil { panic(err) }
 defer file.Close()
 bow.Download(file)
 ```
-
-
-### Settings
-```go
-bow := surf.NewBrowser()
-
-// Set the user agent this browser instance will send with each request.
-bow.SetUserAgent("SuperCrawler/1.0")
-
-// Or set the user agent globally so every new browser you create uses it.
-browser.DefaultUserAgent = "SuperCrawler/1.0"
-
-// Attributes control how the browser behaves. Use the SetAttribute() method
-// to set attributes one at a time.
-bow.SetAttribute(browser.SendReferer, false)
-bow.SetAttribute(browser.MetaRefreshHandling, false)
-bow.SetAttribute(browser.FollowRedirects, false)
-
-// Or set the attributes all at once using SetAttributes().
-bow.SetAttributes(browser.AttributeMap{
-    browser.SendReferer:         surf.DefaultSendReferer,
-    browser.MetaRefreshHandling: surf.DefaultMetaRefreshHandling,
-    browser.FollowRedirects:     surf.DefaultFollowRedirects,
-})
-
-// The attributes can also be set globally. Now every new browser you create
-// will be set with these defaults.
-surf.DefaultSendReferer = false
-surf.DefaultMetaRefreshHandling = false
-surf.DefaultFollowRedirects = false
-
-// Override the build in cookie jar.
-// Surf uses cookiejar.Jar by default.
-bow.SetCookieJar(jar.NewMemoryCookies())
-
-// Override the build in bookmarks jar.
-// Surf uses jar.MemoryBookmarks by default.
-bow.SetBookmarksJar(jar.NewMemoryBookmarks())
-
-// Use jar.FileBookmarks to read and write your bookmarks to a JSON file.
-bookmarks, err = jar.NewFileBookmarks("/home/joe/bookmarks.json")
-if err != nil { panic(err) }
-bow.SetBookmarksJar(bookmarks)
-```
-
-
-### User Agents
-The agent package contains a number of methods for creating user agent strings for popular browsers and crawlers, and for generating your own user agents.
-```go
-bow := surf.NewBrowser()
-
-// Use the Google Chrome user agent. The Chrome() method returns:
-// "Mozilla/5.0 (Windows NT 6.3; x64) Chrome/37.0.2049.0 Safari/537.36".
-bow.SetUserAgent(agent.Chrome())
-
-// The Firefox() method returns:
-// "Mozilla/5.0 (Windows NT 6.3; x64; rv:31.0) Gecko/20100101 Firefox/31.0".
-bow.SetUserAgent(agent.Firefox())
-
-// The Safari() method returns:
-// "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_6_8) AppleWebKit/536.26 (KHTML, like Gecko) Version/6.0 Safari/8536.25".
-bow.SetUserAgent(agent.Safari())
-
-// There are methods for a number of bows and crawlers. For example
-// Opera(), MSIE(), AOL(), GoogleBot(), and many more. You can even choose
-// the bow version. This will create:
-// "Mozilla/5.0 (Windows NT 6.3; x64) Chrome/35 Safari/537.36".
-ua := agent.CreateVersion("chrome", "35")
-bow.SetUserAgent(ua)
-
-// Creating your own custom user agent is just as easy. The following code
-// generates the user agent:
-// "Mybow/1.0 (Windows NT 6.1; WOW64; x64)".
-agent.Name = "Mybow"
-agent.Version = "1.0"
-agent.OSName = "Windows NT"
-agent.OSVersion = "6.1"
-agent.Comments = []string{"WOW64", "x64"}
-bow.SetUserAgent(agent.Create())
-```
-The agent package has an internal database for many different versions of many different browsers. See the [agent package API documentation](http://godoc.org/github.com/headzoo/surf/agent) for more information.
 
 
 ### Downloading
@@ -253,6 +173,111 @@ close(ch)
 log.Println("Downloads complete!")
 ```
 When downloading assets asynchronously, you should keep in mind the potentially large number of assets embedded into a typical web page. For that reason you should setup a queue that downloads only a few at a time.
+
+
+### User Agents
+The agent package contains a number of methods for creating user agent strings for popular browsers and crawlers, and for generating your own user agents.
+```go
+bow := surf.NewBrowser()
+
+// Use the Google Chrome user agent. The Chrome() method returns:
+// "Mozilla/5.0 (Windows NT 6.3; x64) Chrome/37.0.2049.0 Safari/537.36".
+bow.SetUserAgent(agent.Chrome())
+
+// The Firefox() method returns:
+// "Mozilla/5.0 (Windows NT 6.3; x64; rv:31.0) Gecko/20100101 Firefox/31.0".
+bow.SetUserAgent(agent.Firefox())
+
+// The Safari() method returns:
+// "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_6_8) AppleWebKit/536.26 (KHTML, like Gecko) Version/6.0 Safari/8536.25".
+bow.SetUserAgent(agent.Safari())
+
+// There are methods for a number of bows and crawlers. For example
+// Opera(), MSIE(), AOL(), GoogleBot(), and many more. You can even choose
+// the bow version. This will create:
+// "Mozilla/5.0 (Windows NT 6.3; x64) Chrome/35 Safari/537.36".
+ua := agent.CreateVersion("chrome", "35")
+bow.SetUserAgent(ua)
+
+// Creating your own custom user agent is just as easy. The following code
+// generates the user agent:
+// "Mybow/1.0 (Windows NT 6.1; WOW64; x64)".
+agent.Name = "Mybow"
+agent.Version = "1.0"
+agent.OSName = "Windows NT"
+agent.OSVersion = "6.1"
+agent.Comments = []string{"WOW64", "x64"}
+bow.SetUserAgent(agent.Create())
+```
+The agent package has an internal database for many different versions of many different browsers. See the [agent package API documentation](http://godoc.org/github.com/headzoo/surf/agent) for more information.
+
+
+### Recording and Playback
+The Surf browser has a built in request recorder that can be used to record and play back requests. By default the browser uses an in-memory recorder, but other recorders may be written that write recorded requests to a file, and read them back from the file for replay. A recorder can even be created that parses Apache/Nginx access logs for playback.
+```go
+bow := surf.NewBrowser()
+bow.Recorder().Start()
+
+err := bow.Open("http://www.reddit.com")
+if err != nil { panic(err) }
+
+err = bow.Open("http://www.reddit.com/new")
+if err != nil { panic(err) }
+
+err = bow.Open("http://www.reddit.com/top")
+if err != nil { panic(err) }
+
+bow.Recorder().Stop()
+
+// Calling reply will make the same three requests in the same order they were
+// requested using the same request parameters.
+err = bow.Recorder().Replay()
+if err != nil { panic(err) }
+```
+
+
+### Settings
+```go
+bow := surf.NewBrowser()
+
+// Set the user agent this browser instance will send with each request.
+bow.SetUserAgent("SuperCrawler/1.0")
+
+// Or set the user agent globally so every new browser you create uses it.
+browser.DefaultUserAgent = "SuperCrawler/1.0"
+
+// Attributes control how the browser behaves. Use the SetAttribute() method
+// to set attributes one at a time.
+bow.SetAttribute(browser.SendReferer, false)
+bow.SetAttribute(browser.MetaRefreshHandling, false)
+bow.SetAttribute(browser.FollowRedirects, false)
+
+// Or set the attributes all at once using SetAttributes().
+bow.SetAttributes(browser.AttributeMap{
+    browser.SendReferer:         surf.DefaultSendReferer,
+    browser.MetaRefreshHandling: surf.DefaultMetaRefreshHandling,
+    browser.FollowRedirects:     surf.DefaultFollowRedirects,
+})
+
+// The attributes can also be set globally. Now every new browser you create
+// will be set with these defaults.
+surf.DefaultSendReferer = false
+surf.DefaultMetaRefreshHandling = false
+surf.DefaultFollowRedirects = false
+
+// Override the build in cookie jar.
+// Surf uses cookiejar.Jar by default.
+bow.SetCookieJar(jar.NewMemoryCookies())
+
+// Override the build in bookmarks jar.
+// Surf uses jar.MemoryBookmarks by default.
+bow.SetBookmarksJar(jar.NewMemoryBookmarks())
+
+// Use jar.FileBookmarks to read and write your bookmarks to a JSON file.
+bookmarks, err = jar.NewFileBookmarks("/home/joe/bookmarks.json")
+if err != nil { panic(err) }
+bow.SetBookmarksJar(bookmarks)
+```
 
 
 ### Credits
