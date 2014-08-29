@@ -7,13 +7,14 @@ Surf is a Go (golang) library that implements a virtual browser that you can con
 _This project is very young, and the API is bound to change often. Use at your own risk. The master branch is the stable branch, while future work is being done on the dev branch._
 
 * [Installation](#installation)
-* [Usage](#usage)
-* [Settings](#settings)
-* [User Agents](#user-agents)
+* [General Usage](#general-usage)
 * [Downloading](#downloading)
+* [User Agents](#user-agents)
+* [Settings](#settings)
 * [Credits](#credits)
 * [Use Cases](#use-cases)
 * [TODO](#todo)
+
 
 ### Installation
 Download the library using go.  
@@ -32,8 +33,8 @@ Import the library into your project.
 bow := surf.NewBrowser()
 
 // Add additional request headers.
-bow.AddHeader("Accept", "text/html")
-bow.AddHeader("Accept-Charset", "utf8")
+bow.AddRequestHeader("Accept", "text/html")
+bow.AddRequestHeader("Accept-Charset", "utf8")
 
 // Requesting a page.
 err := bow.Open("http://www.reddit.com")
@@ -140,14 +141,6 @@ bow.SetBookmarksJar(jar.NewMemoryBookmarks())
 bookmarks, err = jar.NewFileBookmarks("/home/joe/bookmarks.json")
 if err != nil { panic(err) }
 bow.SetBookmarksJar(bookmarks)
-
-// Override the build in history jar.
-// Surf uses jar.MemoryHistory by default.
-bow.SetHistoryJar(jar.NewMemoryHistory())
-
-// Override the build in recorder jar.
-// Surf uses jar.MemoryRecorder by default.
-bow.SetRecorderJar(jar.NewMemoryRecorder())
 ```
 
 
@@ -274,8 +267,9 @@ Surf uses the awesome [goquery](https://github.com/PuerkitoBio/goquery) by Marti
 
 
 ### TODO
+* Add user authentication.
+* Run JavaScript found in the page?
 * Add AttributeDownloadAssets so the browser downloads the images, scripts, stylesheets, etc.
 * Write more tests. 
 * File uploading in forms.
 * Handle checkboxes correctly.
-* Run JavaScript found in the page?
