@@ -2,6 +2,7 @@
 * Added user authorization.
 * Added event system.
 * Added request recorder.
+* Added logging.
 
 
 #### v0.4.8 - 2014/08/28

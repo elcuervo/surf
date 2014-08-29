@@ -32,6 +32,20 @@ const (
 	FollowRedirects
 )
 
+// LogLevel represents a logging level.
+type LogLevel int8
+
+const (
+	// LogLevelDebug is the most verbose logging level.
+	LogLevelDebug LogLevel = iota
+
+	// LogLevelInfo only logs basic requests and form submissions.
+	LogLevelInfo
+
+	// LogLevelError logs errors.
+	LogLevelError
+)
+
 // InitialAssetsArraySize is the initial size when allocating a slice of page
 // assets. Increasing this size may lead to a very small performance increase
 // when downloading assets from a page with a lot of assets.
@@ -78,7 +92,7 @@ type Browsable interface {
 	SetEventDispatcher(ed event.Eventable)
 
 	// SetLogger sets the instance that will be used to log events.
-	SetLogger(l *log.Logger)
+	SetLogger(l *log.Logger, lev LogLevel)
 
 	// AddRequestHeader adds a header the browser sends with each request.
 	AddRequestHeader(name, value string)
@@ -201,6 +215,9 @@ type Browser struct {
 
 	// logger will log events.
 	logger *log.Logger
+
+	// logLevel is the logging level.
+	logLevel LogLevel
 }
 
 // Open requests the given URL using the GET method.
@@ -253,6 +270,7 @@ func (bow *Browser) PostForm(u string, data url.Values) error {
 func (bow *Browser) Back() bool {
 	if bow.history.Len() > 1 {
 		bow.state = bow.history.Pop()
+		bow.logDebug("Back called. New page is %s.", bow.state.Request.URL.String())
 		return true
 	}
 	return false
@@ -261,6 +279,7 @@ func (bow *Browser) Back() bool {
 // Reload duplicates the last successful request.
 func (bow *Browser) Reload() error {
 	if bow.state.Request != nil {
+		bow.logDebug("Reloading page %s.", bow.state.Request.URL.String())
 		return bow.httpRequest(bow.state.Request)
 	}
 	return errors.NewPageNotLoaded("Cannot reload, the previous request failed.")
@@ -273,6 +292,7 @@ func (bow *Browser) Recorder() jar.Recorder {
 
 // Bookmark saves the page URL in the bookmarks with the given name.
 func (bow *Browser) Bookmark(name string) error {
+	bow.logDebug("Bookmarking page %s.", bow.Url().String())
 	return bow.bookmarks.Save(name, bow.ResolveUrl(bow.Url()).String())
 }
 
@@ -457,7 +477,9 @@ func (bow *Browser) SetRecorderJar(rj jar.Recorder) {
 	// Have the recorder let the browser know when it's playing back requests
 	// so the browser can make the request.
 	bow.recorder.OnFunc(event.RecordReplay, (event.HandlerFunc)(func(_ event.Event, _, args interface{}) error {
-		err := bow.httpRequest(args.(*http.Request))
+		req := args.(*http.Request)
+		bow.logDebug("Playing back request %s %s.", req.Method, req.URL.String())
+		err := bow.httpRequest(req)
 		if err != nil {
 			return err
 		}
@@ -476,8 +498,9 @@ func (bow *Browser) SetEventDispatcher(ed event.Eventable) {
 }
 
 // SetLogger sets the instance that will be used to log events.
-func (bow *Browser) SetLogger(l *log.Logger) {
+func (bow *Browser) SetLogger(l *log.Logger, lev LogLevel) {
 	bow.logger = l
+	bow.logLevel = lev
 }
 
 // AddRequestHeader sets a header the browser sends with each request.
@@ -502,6 +525,7 @@ func (bow *Browser) ResolveStringUrl(u string) (string, error) {
 
 // Download writes the contents of the document to the given writer.
 func (bow *Browser) Download(o io.Writer) (int64, error) {
+	bow.logInfo("Downloading page %s.", bow.Url().String())
 	h, err := bow.state.Dom.Html()
 	if err != nil {
 		return 0, err
@@ -565,13 +589,17 @@ func (bow *Browser) buildRequest(method string, u *url.URL, ref *url.URL) (*http
 	}
 	req.Header = bow.headers
 	req.Header.Add("User-Agent", bow.userAgent)
+	bow.logDebug("Setting User-Agent header to %s.", bow.userAgent)
 	if bow.attributes[SendReferer] && ref != nil {
+		bow.logDebug("Setting Referer header to %s.", ref.String())
 		req.Header.Add("Referer", ref.String())
 	}
 	if bow.auth.Username != "" {
+		auth := basicAuth(bow.auth.Username, bow.auth.Password)
+		bow.logDebug("Setting Authorization header to %s.", auth)
 		req.Header.Add(
 			"Authorization",
-			"Basic "+basicAuth(bow.auth.Username, bow.auth.Password),
+			"Basic "+auth,
 		)
 	}
 
@@ -611,19 +639,22 @@ func (bow *Browser) httpPOST(u *url.URL, ref *url.URL, contentType string, body 
 func (bow *Browser) httpRequest(req *http.Request) error {
 	err := bow.doPreRequest(req)
 	if err != nil {
-		return err
+		return bow.logError(err)
 	}
 
 	if bow.refresh != nil {
 		bow.refresh.Stop()
 	}
+	bow.logInfo("Sending request. %s %s", req.Method, req.URL.String())
 	resp, err := bow.buildClient().Do(req)
 	if err != nil {
-		return err
+		return bow.logError(err)
 	}
+	bow.logInfo("Received %d response.", resp.StatusCode)
+
 	dom, err := goquery.NewDocumentFromResponse(resp)
 	if err != nil {
-		return err
+		return bow.logError(err)
 	}
 	bow.history.Push(bow.state)
 	bow.state = jar.NewHistoryState(req, resp, dom)
@@ -631,7 +662,7 @@ func (bow *Browser) httpRequest(req *http.Request) error {
 
 	err = bow.doPostRequest(resp)
 	if err != nil {
-		return err
+		return bow.logError(err)
 	}
 	return nil
 }
@@ -645,6 +676,7 @@ func (bow *Browser) handleMetaRefresh() {
 			if ok {
 				dur, err := time.ParseDuration(attr + "s")
 				if err == nil {
+					bow.logDebug("Creating %d second timer for meta refresh.", dur.Seconds())
 					bow.refresh = time.NewTimer(dur)
 					go func() {
 						<-bow.refresh.C
@@ -658,16 +690,19 @@ func (bow *Browser) handleMetaRefresh() {
 
 // doPreRequest triggers the PreRequestEvent event.
 func (bow *Browser) doPreRequest(req *http.Request) error {
+	bow.logDebug("Doing event event.PreRequest.")
 	return bow.Do(event.PreRequest, bow, req)
 }
 
 // doPostRequest triggers the PostRequestEvent event.
 func (bow *Browser) doPostRequest(resp *http.Response) error {
+	bow.logDebug("Doing event event.PostRequest.")
 	return bow.Do(event.PostRequest, bow, resp)
 }
 
 // doClick triggers the ClickEvent event.
 func (bow *Browser) doClick(u *url.URL) error {
+	bow.logDebug("Doing event event.Click.")
 	return bow.Do(event.Click, bow, u)
 }
 
@@ -679,6 +714,8 @@ func (bow *Browser) newForm(s *goquery.Selection) *Form {
 		fm := sender.(*Form)
 		action := bow.ResolveUrl(fm.Action())
 		values := args.(url.Values)
+
+		bow.logInfo("Submitting form %s %s %#v.", fm.Method(), fm.Action(), values)
 		if fm.Method() == "GET" {
 			return bow.OpenForm(action.String(), values)
 		} else {
@@ -713,6 +750,34 @@ func (bow *Browser) attrToResolvedUrl(name string, sel *goquery.Selection) (*url
 	return bow.ResolveUrl(ur), nil
 }
 
+// logDebug logs the given message using log.Printf at the debug level when a logger has been set.
+//
+// A new line is automatically appended to the message.
+func (bow *Browser) logDebug(msg string, a ...interface{}) {
+	if bow.logger != nil && bow.logLevel >= LogLevelDebug {
+		bow.logger.Printf(msg+"\n", a...)
+	}
+}
+
+// logInfo logs the given message using log.Printf at the info level when a logger has been set.
+//
+// A new line is automatically appended to the message.
+func (bow *Browser) logInfo(msg string, a ...interface{}) {
+	if bow.logger != nil && bow.logLevel >= LogLevelInfo {
+		bow.logger.Printf(msg+"\n", a...)
+	}
+}
+
+// logError logs the given message using log.Printf at the error level when a logger has been set.
+//
+// A new line is automatically appended to the message.
+func (bow *Browser) logError(e error) error {
+	if bow.logger != nil && bow.logLevel >= LogLevelError {
+		bow.logger.Println(e.Error())
+	}
+	return e
+}
+
 // attributeOrDefault reads an attribute and returns it or the default value when it's empty.
 func attrOrDefault(name, def string, sel *goquery.Selection) string {
 	a, ok := sel.Attr(name)
@@ -722,7 +787,7 @@ func attrOrDefault(name, def string, sel *goquery.Selection) string {
 	return def
 }
 
-// basicAuth creates an Authentication header from the username and passwrod.
+// basicAuth creates an Authentication header from the username and password.
 func basicAuth(username, password string) string {
 	auth := username + ":" + password
 	return base64.StdEncoding.EncodeToString([]byte(auth))
