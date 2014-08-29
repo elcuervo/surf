@@ -62,13 +62,13 @@ type HandlerMap map[Event][]HandlerFunc
 // handlers and calls the handlers when the event is triggered.
 type Eventable interface {
 	// On binds an event to an event handler.
-	On(event Event, handler Handler)
+	On(e Event, handler Handler)
 
 	// OnFunc binds an event to an event handling function.
-	OnFunc(event Event, handler HandlerFunc)
+	OnFunc(e Event, handler HandlerFunc)
 
 	// Do calls the handlers that have been bound to the given event.
-	Do(event Event, sender, args interface{}) error
+	Do(e Event, sender, args interface{}) error
 }
 
 // Dispatcher implements the Eventable interface.
