@@ -7,7 +7,6 @@ import (
 	"github.com/headzoo/surf/event"
 	"github.com/headzoo/surf/jar"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
@@ -582,8 +581,8 @@ func (bow *Browser) buildClient() *http.Client {
 
 // buildRequest creates and returns a *http.Request type.
 // Sets any headers that need to be sent with the request.
-func (bow *Browser) buildRequest(method string, u *url.URL, ref *url.URL) (*http.Request, error) {
-	req, err := http.NewRequest(method, u.String(), nil)
+func (bow *Browser) buildRequest(method, url string, ref *url.URL, body io.Reader) (*http.Request, error) {
+	req, err := http.NewRequest(method, url, body)
 	if err != nil {
 		return nil, err
 	}
@@ -610,7 +609,7 @@ func (bow *Browser) buildRequest(method string, u *url.URL, ref *url.URL) (*http
 // When via is not nil, and AttributeSendReferer is true, the Referer header will
 // be set to ref.
 func (bow *Browser) httpGET(u *url.URL, ref *url.URL) error {
-	req, err := bow.buildRequest("GET", u, ref)
+	req, err := bow.buildRequest("GET", u.String(), ref, nil)
 	if err != nil {
 		return err
 	}
@@ -621,15 +620,10 @@ func (bow *Browser) httpGET(u *url.URL, ref *url.URL) error {
 // When via is not nil, and AttributeSendReferer is true, the Referer header will
 // be set to ref.
 func (bow *Browser) httpPOST(u *url.URL, ref *url.URL, contentType string, body io.Reader) error {
-	req, err := bow.buildRequest("POST", u, ref)
+	req, err := bow.buildRequest("POST", u.String(), ref, body)
 	if err != nil {
 		return err
 	}
-	rc, ok := body.(io.ReadCloser)
-	if !ok && body != nil {
-		rc = ioutil.NopCloser(body)
-	}
-	req.Body = rc
 	req.Header.Add("Content-Type", contentType)
 
 	return bow.httpRequest(req)
